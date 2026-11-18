@@ -1,0 +1,101 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Water Projects - Lector QR</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f5f7;
+      margin: 0;
+      padding: 20px;
+      color: #202b38;
+    }
+
+    .contenedor {
+      max-width: 480px;
+      margin: 30px auto;
+      background: white;
+      padding: 24px;
+      border-radius: 14px;
+      text-align: center;
+      box-shadow: 0 3px 15px #00000012;
+    }
+
+    h1 { color: #173e63; }
+
+    button {
+      width: 100%;
+      padding: 15px;
+      margin-top: 15px;
+      border: none;
+      border-radius: 8px;
+      background: #173e63;
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    #lector { margin-top: 20px; }
+
+    #resultado {
+      margin-top: 18px;
+      padding: 14px;
+      background: #e0f2fe;
+      border-radius: 8px;
+      overflow-wrap: anywhere;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="contenedor">
+    <h1>WATER PROJECTS</h1>
+    <p>Prueba de cámara del lector QR</p>
+
+    <button id="iniciar" onclick="iniciarEscaner()">
+      ACTIVAR CÁMARA
+    </button>
+
+    <div id="lector"></div>
+    <div id="resultado">Esperando para iniciar...</div>
+  </div>
+
+  <script>
+    let escaner = null;
+    let activo = false;
+
+    async function iniciarEscaner() {
+      if (activo) return;
+
+      const resultado = document.getElementById("resultado");
+
+      try {
+        escaner = new Html5Qrcode("lector");
+
+        await escaner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 240, height: 240 } },
+          function(codigo) {
+            resultado.textContent = "QR LEÍDO CORRECTAMENTE: " + codigo;
+          },
+          function() {}
+        );
+
+        activo = true;
+        resultado.textContent = "Cámara activada. Apunta al código QR.";
+        document.getElementById("iniciar").disabled = true;
+
+      } catch (error) {
+        resultado.textContent =
+          "No se pudo activar la cámara: " +
+          (error.message || error);
+      }
+    }
+  </script>
+</body>
+</html>
