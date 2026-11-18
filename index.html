@@ -1,78 +1,153 @@
-
+   
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Water Projects - Lector QR</title>
+  <title>Water Projects - Control de asistencia</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
-
   <style>
     body {
       font-family: Arial, sans-serif;
       background: #f3f5f7;
       margin: 0;
-      padding: 20px;
+      padding: 16px;
       color: #202b38;
     }
-
     .contenedor {
       max-width: 480px;
-      margin: 30px auto;
+      margin: 15px auto;
       background: white;
-      padding: 24px;
+      padding: 22px;
       border-radius: 14px;
-      text-align: center;
       box-shadow: 0 3px 15px #00000012;
     }
-
-    h1 { color: #173e63; }
-
-    button {
+    h1 { color: #173e63; text-align: center; }
+    label { display: block; margin-top: 16px; font-weight: bold; }
+    select, button {
       width: 100%;
-      padding: 15px;
-      margin-top: 15px;
-      border: none;
+      padding: 14px;
+      margin-top: 8px;
       border-radius: 8px;
+      font-size: 16px;
+    }
+    select { border: 1px solid #ccc; background: white; }
+    button {
+      border: none;
       background: #173e63;
       color: white;
-      font-size: 16px;
       font-weight: bold;
+      cursor: pointer;
     }
-
+    button:disabled { opacity: .5; }
     #lector { margin-top: 20px; }
-
     #resultado {
       margin-top: 18px;
-      padding: 14px;
-      background: #e0f2fe;
+      padding: 15px;
+      background: #e8eef4;
       border-radius: 8px;
+      text-align: center;
       overflow-wrap: anywhere;
     }
+    .oculto { display: none; }
+    .ayuda { color: #64748b; font-size: 13px; text-align: center; }
   </style>
 </head>
-
 <body>
   <div class="contenedor">
     <h1>WATER PROJECTS</h1>
-    <p>Prueba de cámara del lector QR</p>
+    <p style="text-align:center">Control de asistencia - Seminario técnico</p>
 
-    <button id="iniciar" onclick="iniciarEscaner()">
-      ACTIVAR CÁMARA
+    <label for="recepcionista">Recepcionista</label>
+    <select id="recepcionista" disabled>
+      <option value="">Cargando...</option>
+    </select>
+
+    <label for="ciudad">Sede del seminario</label>
+    <select id="ciudad" disabled>
+      <option value="">Seleccionar ciudad</option>
+    </select>
+
+    <button id="iniciar" onclick="iniciarEscaner()" disabled>
+      ACTIVAR LECTOR QR
     </button>
 
     <div id="lector"></div>
-    <div id="resultado">Esperando para iniciar...</div>
+
+    <div id="resultado">Conectando con el sistema...</div>
+
+    <button id="continuar" class="oculto" onclick="continuarEscaneo()">
+      ESCANEAR SIGUIENTE PARTICIPANTE
+    </button>
+
+    <p class="ayuda">Un registro por participante y por sede.</p>
   </div>
 
   <script>
+    const API = "https://script.google.com/a/macros/waterprojects-ec.com/s/AKfycbwqWSexpkg5GbBdmh8ERsjs54Zn7Qq6fU0aFei39ugoxkPK3Xf7gMiIoDkakaFf7lE/exec";
+
     let escaner = null;
+    let procesando = false;
     let activo = false;
+
+    const resultado = document.getElementById("resultado");
+    const botonIniciar = document.getElementById("iniciar");
+    const botonContinuar = document.getElementById("continuar");
+
+    function consultarAPI(parametros, callback) {
+      const script = document.createElement("script");
+      const consulta = new URLSearchParams(parametros);
+      script.src = API + "?" + consulta.toString();
+
+      script.onerror = function() {
+        script.remove();
+        resultado.textContent =
+          "No se pudo conectar con Google Sheets. Verifica el acceso a la aplicación.";
+      };
+
+      document.body.appendChild(script);
+    }
+
+    function cargarConfiguracion() {
+      resultado.textContent = "Cargando recepcionistas y sedes...";
+
+      window.wpConfigCallback = function(datos) {
+        const recepcionista = document.getElementById("recepcionista");
+        const ciudad = document.getElementById("ciudad");
+
+        recepcionista.innerHTML = '<option value="">Seleccionar recepcionista</option>';
+        ciudad.innerHTML = '<option value="">Seleccionar ciudad</option>';
+
+        datos.recepcionistas.forEach(nombre => {
+          recepcionista.add(new Option(nombre, nombre));
+        });
+
+        datos.ciudades.forEach(nombre => {
+          ciudad.add(new Option(nombre, nombre));
+        });
+
+        recepcionista.disabled = false;
+        ciudad.disabled = false;
+        botonIniciar.disabled = false;
+        resultado.textContent = "Sistema conectado. Selecciona tus datos.";
+      };
+
+      consultarAPI({
+        action: "config",
+        callback: "wpConfigCallback"
+      });
+    }
 
     async function iniciarEscaner() {
       if (activo) return;
 
-      const resultado = document.getElementById("resultado");
+      const recepcionista = document.getElementById("recepcionista").value;
+      const ciudad = document.getElementById("ciudad").value;
+
+      if (!recepcionista || !ciudad) {
+        resultado.textContent = "Selecciona la recepcionista y la sede.";
+        return;
+      }
 
       try {
         escaner = new Html5Qrcode("lector");
@@ -80,22 +155,67 @@
         await escaner.start(
           { facingMode: "environment" },
           { fps: 10, qrbox: { width: 240, height: 240 } },
-          function(codigo) {
-            resultado.textContent = "QR LEÍDO CORRECTAMENTE: " + codigo;
-          },
+          codigoLeido,
           function() {}
         );
 
         activo = true;
-        resultado.textContent = "Cámara activada. Apunta al código QR.";
-        document.getElementById("iniciar").disabled = true;
-
+        botonIniciar.disabled = true;
+        resultado.textContent = "Lector activo. Escanea la credencial del participante.";
       } catch (error) {
-        resultado.textContent =
-          "No se pudo activar la cámara: " +
-          (error.message || error);
+        resultado.textContent = "Error al activar la cámara: " + error.message;
       }
     }
+
+    function codigoLeido(codigo) {
+      if (procesando) return;
+      procesando = true;
+
+      try { escaner.pause(true); } catch (e) {}
+
+      resultado.textContent = "Verificando participante...";
+      botonContinuar.classList.add("oculto");
+
+      window.wpScanCallback = function(datos) {
+        mostrarResultado(datos);
+      };
+
+      consultarAPI({
+        action: "scan",
+        codigo: codigo,
+        ciudad: document.getElementById("ciudad").value,
+        recepcionista: document.getElementById("recepcionista").value,
+        callback: "wpScanCallback"
+      });
+    }
+
+    function mostrarResultado(datos) {
+      let mensaje = datos.mensaje || "Respuesta recibida.";
+
+      if (datos.nombre) mensaje += "\nParticipante: " + datos.nombre;
+      if (datos.empresa) mensaje += "\nEmpresa: " + datos.empresa;
+      if (datos.hora) mensaje += "\nHora: " + datos.hora;
+
+      resultado.textContent = mensaje;
+      resultado.style.background =
+        datos.resultado === "AUTORIZADO" ? "#dcfce7" : "#fee2e2";
+
+      botonContinuar.classList.remove("oculto");
+    }
+
+    function continuarEscaneo() {
+      procesando = false;
+      botonContinuar.classList.add("oculto");
+      resultado.textContent = "Listo para escanear al siguiente participante.";
+
+      try {
+        escaner.resume();
+      } catch (error) {
+        resultado.textContent = "No se pudo reanudar el lector. Recarga la página.";
+      }
+    }
+
+    cargarConfiguracion();
   </script>
 </body>
 </html>
